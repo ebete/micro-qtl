@@ -24,10 +24,15 @@ go_roots = {
 
 
 class GoTerm(object):
-    def __init__(self, go_id, go_namespace, child_terms=None):
+    def __init__(self, go_id, go_name=None, go_def=None):
+        if go_id is None:
+            raise ValueError("go_id cannot be None.")
+
         self.go_id = go_id
-        self.namespace = go_namespace
-        self.children = child_terms
+        self.go_name = go_name
+        self.go_def = go_def
+        self.children = list()
+        self.parents = list()
         self.total_offspring = 0
 
     def __hash__(self):
@@ -35,27 +40,42 @@ class GoTerm(object):
         return hash(self.go_id)
 
     def __repr__(self):
-        return 'GoTerm(go_id="{}", go_namespace="{}", total_offspring={})'.format(
-            self.go_id, self.namespace, self.total_offspring
+        return 'GoTerm(go_id="{}", go_name="{}", go_def="{}", children={}, parents={}, total_offspring={})'.format(
+            self.go_id, self.go_name, self.go_def, len(self.children), len(self.parents), self.total_offspring
         )
 
+    def __str__(self):
+        return '{} [{}]'.format(
+            self.go_id, self.go_name
+        )
+
+    def set_name(self, go_name):
+        self.go_name = go_name
+        return self
+
+    def set_definition(self, go_def):
+        self.go_def = go_def
+        return self
+
+    def add_parent(self, parent_term):
+        if parent_term not in self.parents:
+            self.parents.append(parent_term)
+        return self
+
     def add_child(self, child_term):
-        if not self.children:
-            self.children = [child_term]
-        else:
+        if child_term not in self.children:
             self.children.append(child_term)
         return self
 
 
-def parse_go_parents(go_file):
+def parse_go_tree(go_file):
     go_map = dict()
 
     logging.info("Reading GO data file %s ...", go_file)
     with gzip.open(go_file, "rt") as f:
         # fast-forward to first GO term definition
-        for line in f:
-            if line.startswith("[Term]"):
-                break
+        while not next(f).startswith("[Term]"):
+            pass
 
         read_record = True
         term_data = dict()
@@ -63,13 +83,23 @@ def parse_go_parents(go_file):
             line = line.strip()
             if not line:
                 continue
-            if line.startswith("[Term]"):
-                # write term_data to tree
+            if line.startswith("[") and read_record:
+                # write term_data to dictionary
                 if term_data.get("is_obsolete", "false") != "true":
                     parent_nodes = [x.split(" ! ")[0] for x in term_data.get("is_a", list())]
-                    go_map[term_data["id"]] = parent_nodes
+                    node_id = term_data["id"]
+
+                    go_map.setdefault(node_id, GoTerm(node_id)) \
+                        .set_name(term_data.get("name")) \
+                        .set_definition(term_data.get("def"))
+
+                    for parent in parent_nodes:
+                        go_map[node_id].add_parent(parent)
+                        go_map.setdefault(parent, GoTerm(parent)).add_child(node_id)
                 # initialise parser for next term
                 term_data = dict()
+
+            if line.startswith("[Term]"):
                 read_record = True
                 continue
             elif line.startswith("["):
@@ -90,45 +120,21 @@ def parse_go_parents(go_file):
     return go_map
 
 
-def traverse_tree(go_parents, lookup_go):
-    parents = go_parents.get(lookup_go, list())
+def traverse_tree(go_tree, lookup_go):
+    go_node = go_tree[lookup_go]
 
-    if not parents:
+    if not go_node.parents:
         return
 
-    for parent in parents:
-        print('{} -> {}'.format(lookup_go, parent))
-        traverse_tree(go_parents, parent)
+    for parent in go_node.parents:
+        print('"{}" -> "{}";'.format(go_node, go_tree[parent]))
+        traverse_tree(go_tree, parent)
 
 
-def reverse_lookup_map(lookup_map):
-    reversed_map = dict()
-    for child, parents in lookup_map.items():
-        for parent in parents:
-            reversed_map.setdefault(parent, list()).append(child)
-    return reversed_map
-
-
-def create_go_tree(go_children_map, current_node):
-    children = go_children_map.get(current_node)
-    new_node = GoTerm(current_node, "biological_process")
-
-    if not children:
-        return new_node
-
-    for child in children:
-        new_node.add_child(create_go_tree(go_children_map, child))
-
-    return new_node
-
-
-def calculate_offspring_counts(go_tree):
-    if go_tree.children is None:
-        return 0
-
-    for child_node in go_tree.children:
-        go_tree.total_offspring += 1 + calculate_offspring_counts(child_node)
-    return go_tree.total_offspring
+def make_plot(go_tree, lookup_go, output_fig):
+    print("digraph {")
+    traverse_tree(go_tree, "GO:2001317")
+    print("}")
 
 
 def parse_arguments():
@@ -166,13 +172,8 @@ if __name__ == "__main__":
 
     exitcode = 0
     try:
-        go_parents = parse_go_parents(args.go_file)
-        # for k, v in go_parents.items():
-        #     print(k, v, sep="\t")
-        go_children = reverse_lookup_map(go_parents)
-        go_bp_tree = create_go_tree(go_children, go_roots["biological_process"])
-        calculate_offspring_counts(go_bp_tree)
-        print(go_bp_tree)
+        go_tree = parse_go_tree(args.go_file)
+        make_plot(go_tree, "GO:2001317", "/dev/null")
     # except Exception as ex:
     #     exitcode = 1
     #     logging.error(ex)
