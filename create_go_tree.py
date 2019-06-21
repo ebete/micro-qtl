@@ -11,6 +11,7 @@ import logging
 import lzma
 import pickle
 import sys
+from math import log2
 
 __description__ = "Create a tree-like structure of the Gene Ontology flat-file."
 __epilog__ = """
@@ -40,14 +41,17 @@ class GoTerm(object):
         self.children = list()
         self.parents = list()
         self.total_offspring = 0
+        self.information_content = 0.
 
     def __hash__(self):
         # we assume that go_id is unique for all instances (should be the case anyway)
         return hash(self.go_id)
 
     def __repr__(self):
-        return 'GoTerm(go_id="{}", go_name="{}", go_def="{}", children={}, parents={}, total_offspring={})'.format(
-            self.go_id, self.go_name, self.go_def, len(self.children), len(self.parents), self.total_offspring
+        return 'GoTerm(go_id="{}", go_name="{}", go_def="{}", children={}, parents={}, total_offspring={}, ' \
+               'information_content={})'.format(
+            self.go_id, self.go_name, self.go_def, len(self.children), len(self.parents), self.total_offspring,
+            self.information_content
         )
 
     def __str__(self):
@@ -172,6 +176,13 @@ def offspring_calculation(go_tree, go_term):
     return term_data.total_offspring
 
 
+def information_content_calculation(go_tree, go_term, total_terms):
+    term_data = go_tree[go_term]
+    term_data.information_content = -log2((term_data.total_offspring + 1) / total_terms)
+    for child in term_data.children:
+        information_content_calculation(go_tree, child, total_terms)
+
+
 def export_go_tree(go_tree, export_location):
     logging.info("Compressing and exporting GO dictionary to %s ...", export_location)
     with lzma.open(export_location, "wb") as f:
@@ -219,6 +230,7 @@ if __name__ == "__main__":
 
         for k, v in go_roots.items():
             offspring_calculation(go_tree, v)
+            information_content_calculation(go_tree, v, go_tree[v].total_offspring + 1)
             logging.info("Total nodes under %s [%s]: %d", v, k, go_tree[v].total_offspring)
 
         if args.tree_out is not None:
