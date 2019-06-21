@@ -137,6 +137,17 @@ def make_plot(go_tree, lookup_go, output_fig):
     print("}")
 
 
+def offspring_calculation(go_tree, go_term):
+    term_data = go_tree[go_term]
+
+    # fix against calculating offspring multiple times
+    if term_data.total_offspring == 0:
+        for child in term_data.children:
+            term_data.total_offspring += offspring_calculation(go_tree, child) + 1
+
+    return term_data.total_offspring
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description=__description__, epilog=__epilog__)
     # Required arguments
@@ -173,7 +184,10 @@ if __name__ == "__main__":
     exitcode = 0
     try:
         go_tree = parse_go_tree(args.go_file)
-        make_plot(go_tree, "GO:2001317", "/dev/null")
+        # make_plot(go_tree, "GO:2001317", "/dev/null")
+        for k, v in go_roots.items():
+            offspring_calculation(go_tree, v)
+            logging.info("Total nodes under %s [%s]: %d", v, k, go_tree[v].total_offspring)
     # except Exception as ex:
     #     exitcode = 1
     #     logging.error(ex)
