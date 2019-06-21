@@ -8,6 +8,8 @@ MIT License
 import argparse
 import gzip
 import logging
+import lzma
+import pickle
 import sys
 
 __description__ = "Create a tree-like structure of the Gene Ontology flat-file."
@@ -138,6 +140,19 @@ def make_plot(go_tree, lookup_go, output_fig):
 
 
 def offspring_calculation(go_tree, go_term):
+    """
+    Calculate the total number of nodes under a term by using a recursive
+    depth-first tree traversal approach.
+
+    :type go_tree: dict
+    :param go_tree: The GO table containing all terms.
+
+    :type go_term: str
+    :param go_term: The GO node to calculate the offspring count of.
+
+    :rtype: int
+    :return: The number of offspring of the given node.
+    """
     term_data = go_tree[go_term]
 
     # fix against calculating offspring multiple times
@@ -148,11 +163,18 @@ def offspring_calculation(go_tree, go_term):
     return term_data.total_offspring
 
 
+def export_go_tree(go_tree, export_location):
+    logging.info("Compressing and exporting GO dictionary to %s ...", export_location)
+    with lzma.open(export_location, "wb") as f:
+        pickle.dump(go_tree, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description=__description__, epilog=__epilog__)
     # Required arguments
     parser.add_argument("go_file", metavar="GO", help="Gene Ontology data file (go-basic.obo.gz)")
     # Optional arguments
+    parser.add_argument("-o", "--output", metavar="FILE", dest="tree_out", help="Output location of the GO tree")
     # Standard arguments
     parser.add_argument("-v", "--verbose", help="Increase verbosity level", action="count")
     parser.add_argument("-q", "--silent", help="Suppresses output messages, overriding the --verbose argument",
@@ -185,9 +207,13 @@ if __name__ == "__main__":
     try:
         go_tree = parse_go_tree(args.go_file)
         # make_plot(go_tree, "GO:2001317", "/dev/null")
+
         for k, v in go_roots.items():
             offspring_calculation(go_tree, v)
             logging.info("Total nodes under %s [%s]: %d", v, k, go_tree[v].total_offspring)
+
+        if args.tree_out is not None:
+            export_go_tree(go_tree, args.tree_out)
     # except Exception as ex:
     #     exitcode = 1
     #     logging.error(ex)
