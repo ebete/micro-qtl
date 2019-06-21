@@ -26,6 +26,10 @@ go_roots = {
 
 
 class GoTerm(object):
+    """
+    A doubly linked list of GO records containing some extra metadata of the
+    given GO term.
+    """
     def __init__(self, go_id, go_name=None, go_def=None):
         if go_id is None:
             raise ValueError("go_id cannot be None.")
@@ -50,6 +54,11 @@ class GoTerm(object):
         return '{} [{}]'.format(
             self.go_id, self.go_name
         )
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        return self.go_id == other.go_id
 
     def set_name(self, go_name):
         self.go_name = go_name
