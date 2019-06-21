@@ -34,6 +34,12 @@ def read_terms(csv_file):
     return gi_to_go
 
 
+def import_go_tree(import_location):
+    logging.info("Decompressing and importing GO dictionary from %s ...", import_location)
+    with lzma.open(import_location, "rb") as f:
+        return pickle.load(f)
+
+
 def get_go_terms(gi_go_dict):
     all_go = list()
     for go_terms in gi_go_dict.values():
@@ -50,7 +56,7 @@ def calculate_term_generality(gene_go):
     return go_generality
 
 
-def prioritise_genes(region_terms, genome_terms):
+def prioritise_genes(region_terms, genome_terms, generality_cutoff=0.01):
     # region_go = get_go_terms(region_terms)
     # genome_go = get_go_terms(genome_terms)
     go_generality = calculate_term_generality(genome_terms)
@@ -58,16 +64,16 @@ def prioritise_genes(region_terms, genome_terms):
     prioritised_genes = dict()
     for gi, go_terms in region_terms.items():
         # still have to check if term exists in >50% of QTL regions
-        prioritised_terms = [x for x in go_terms if go_generality.get(x, 0) < 0.01]
+        prioritised_terms = [x for x in go_terms if go_generality.get(x, 0) < generality_cutoff]
         prioritised_genes[gi] = prioritised_terms
 
     return prioritised_genes
 
 
-def import_go_tree(import_location):
-    logging.info("Decompressing and importing GO dictionary from %s ...", import_location)
-    with lzma.open(import_location, "rb") as f:
-        return pickle.load(f)
+def term_overrepresentation(go_tree, genome_terms, region_terms):
+    term_counts = {}
+    for gterm in get_go_terms(genome_terms):
+        term_counts[gterm] = term_counts.get(gterm, 0) + 1
 
 
 def parse_arguments():
@@ -111,6 +117,9 @@ if __name__ == "__main__":
         go_tree = import_go_tree(args.go_tree_file)
         region_terms = read_terms(args.region_file)
         genome_terms = read_terms(args.genome_file)
+
+        term_overrepresentation(go_tree, genome_terms, region_terms)
+
         prio = prioritise_genes(region_terms, genome_terms)
         for k, v in prio.items():
             if len(v) > 0:

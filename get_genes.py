@@ -2,9 +2,9 @@
 
 import csv
 import gzip
+import logging
 import lzma
 import pickle
-import logging
 
 
 # from Bio import Entrez
@@ -72,8 +72,8 @@ def get_geneid2go(idmapping_file):
 if __name__ == "__main__":
     logging.basicConfig(format="[%(asctime)s] %(message)s", level=logging.DEBUG)
 
-    regions = get_lod_regions("ril_lod_peaks.csv")
-    geneid2go = get_geneid2go("../db/geneid2go.pickle.xz")
+    regions = get_lod_regions("../ril_lod_peaks.csv")
+    geneid2go = get_geneid2go("../../db/geneid2go.pickle.xz")
     logging.debug("\t".join([
         "lod_index",
         "gene_index",
@@ -85,7 +85,7 @@ if __name__ == "__main__":
 
     go_in_peak = dict()
     for region in regions:
-        records = get_genes_from_gff("../db/GCF_000188115.4_SL3.0_genomic.gff.gz", "refseq2chr.csv", region)
+        records = get_genes_from_gff("../../db/GCF_000188115.4_SL3.0_genomic.gff.gz", "refseq2chr.csv", region)
         go_per_gene = dict()
         idx = 0
         for record in records:
