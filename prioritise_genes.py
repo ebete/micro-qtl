@@ -8,6 +8,8 @@ MIT License
 import argparse
 import csv
 import logging
+import lzma
+import pickle
 import sys
 
 __description__ = "TBA."
@@ -62,9 +64,17 @@ def prioritise_genes(region_terms, genome_terms):
     return prioritised_genes
 
 
+def import_go_tree(import_location):
+    logging.info("Decompressing and importing GO dictionary from %s ...", import_location)
+    with lzma.open(import_location, "rb") as f:
+        return pickle.load(f)
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description=__description__, epilog=__epilog__)
     # Required arguments
+    parser.add_argument("go_tree_file", metavar="FILE", help="File containing the pickled GO tree from "
+                                                             "create_go_tree.py")
     parser.add_argument("region_file", metavar="REGION", help="CSV file containing GI and GO terms in the LOD region")
     parser.add_argument("genome_file", metavar="GENOME", help="CSV file containing GI and GO terms in the genome")
     # Optional arguments
@@ -98,6 +108,7 @@ if __name__ == "__main__":
 
     exitcode = 0
     try:
+        go_tree = import_go_tree(args.go_tree_file)
         region_terms = read_terms(args.region_file)
         genome_terms = read_terms(args.genome_file)
         prio = prioritise_genes(region_terms, genome_terms)
