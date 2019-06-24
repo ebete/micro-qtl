@@ -6,7 +6,6 @@ MIT License
 """
 
 import argparse
-import csv
 import gzip
 import logging
 import lzma
