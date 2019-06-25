@@ -20,18 +20,20 @@ __version__ = "2019.6.0"
 
 
 def read_terms(csv_file):
-    gi_to_go = dict()
+    lod_gi_to_go = dict()
 
     logging.info("Reading GI/GO tuples from %s ...", csv_file)
     with open(csv_file, "r", newline="") as f:
         handle = csv.reader(f, delimiter="\t")
         next(handle)
         for record in handle:
-            terms = record[1].split("; ")
+            lod = record[0]
+            gi_term = record[1]
+            go_terms = record[2].split("; ")
             # removes empty splits
-            gi_to_go[record[0]] = [x for x in terms if len(x) > 0]
+            lod_gi_to_go.setdefault(lod, dict())[gi_term] = [x for x in go_terms if len(x) > 0]
 
-    return gi_to_go
+    return lod_gi_to_go
 
 
 def import_go_tree(import_location):
@@ -78,31 +80,45 @@ def prioritise_goterms(region_terms, genome_terms, generality_cutoff=0.01):
     return set(go_terms)
 
 
-def term_overrepresentation(go_tree, genome_terms, region_terms):
-    genome_counts = go_lineage_occurrence(go_tree, genome_terms)
-    region_counts = go_lineage_occurrence(go_tree, region_terms)
-    overrepresented_terms = prioritise_goterms(region_terms, genome_terms)
+def term_overrepresentation(go_tree, all_terms):
+    genome_counts = go_lineage_occurrence(go_tree, all_terms["all"])
+    region_counts = {k: go_lineage_occurrence(go_tree, v) for k, v in all_terms.items() if k != "all"}
 
-    informative_terms = list()
-    sorted_counts = sorted(region_counts.items(), key=lambda x: x[1], reverse=True)  # sort tuple by occurrence
-    for go, count in sorted_counts:
-        if go not in overrepresented_terms:
-            continue
+    print("go_term", "region_count", "genome_count", "fraction", "information_content", sep="\t")
+    term_statistics = dict()
+    for lod in region_counts:
+        logging.debug("LOD %s", lod)
+        overrepresented_terms = prioritise_goterms(all_terms[lod], all_terms["all"])
 
-        term_ic = go_tree[go].information_content
-        genome_fraction = count / genome_counts[go]
+        informative_terms = list()
+        sorted_counts = sorted(region_counts[lod].items(), key=lambda x: x[1], reverse=True)  # sort tuple by occurrence
+        for go, count in sorted_counts:
+            if go not in overrepresented_terms:
+                continue
 
-        if term_ic < 6.64:
-            continue
+            term_ic = go_tree[go].information_content
+            genome_fraction = count / genome_counts[go]
 
-        print(go, count, genome_counts[go], genome_fraction, "{:.2f}".format(term_ic), sep="\t")
-        informative_terms.append(go)
+            if term_ic < 6.64:
+                continue
 
-    # for g1, g2 in combinations(informative_terms, 2):
-    #     lin_sim = go_lin_similarity(go_tree, g1, g2)
-    #     if lin_sim > 0.9:
-    #         print(g1, g2, lin_sim, sep="\t")
+            print(go, count, genome_counts[go], genome_fraction, "{:.2f}".format(term_ic), sep="\t")
+            informative_terms.append(go)
+
     return informative_terms
+
+
+def go_lineage_occurrence(go_tree, terms):
+    term_counts = {}
+    for gterm in get_go_terms(terms):
+        if gterm not in go_tree:
+            continue
+        term_counts[gterm] = term_counts.get(gterm, 0) + 1
+        term_ancestors = list()
+        get_all_ancestors(go_tree, gterm, term_ancestors)
+        for ancestor in term_ancestors:
+            term_counts[ancestor] = term_counts.get(ancestor, 0) + 1
+    return term_counts
 
 
 def go_lin_similarity(go_tree, term1, term2):
@@ -161,19 +177,6 @@ def lowest_common_ancestor(go_tree, term1, term2):
     return lcs
 
 
-def go_lineage_occurrence(go_tree, terms):
-    term_counts = {}
-    for gterm in get_go_terms(terms):
-        if gterm not in go_tree:
-            continue
-        term_counts[gterm] = term_counts.get(gterm, 0) + 1
-        term_ancestors = list()
-        get_all_ancestors(go_tree, gterm, term_ancestors)
-        for ancestor in term_ancestors:
-            term_counts[ancestor] = term_counts.get(ancestor, 0) + 1
-    return term_counts
-
-
 def get_all_ancestors(go_tree, go_term, ancestors):
     parents = go_tree[go_term].parents
     for parent in parents:
@@ -184,10 +187,10 @@ def get_all_ancestors(go_tree, go_term, ancestors):
 def parse_arguments():
     parser = argparse.ArgumentParser(description=__description__, epilog=__epilog__)
     # Required arguments
-    parser.add_argument("go_tree_file", metavar="FILE", help="File containing the pickled GO tree from "
+    parser.add_argument("go_tree_file", metavar="GO_TREE", help="File containing the pickled GO tree from "
                                                              "create_go_tree.py")
-    parser.add_argument("region_file", metavar="REGION", help="CSV file containing GI and GO terms in the LOD region")
-    parser.add_argument("genome_file", metavar="GENOME", help="CSV file containing GI and GO terms in the genome")
+    parser.add_argument("terms_file", metavar="TERMS", help="CSV file containing GI and GO terms of the LOD "
+                                                            "peaks and genome")
     # Optional arguments
     # Standard arguments
     parser.add_argument("-v", "--verbose", help="Increase verbosity level", action="count")
@@ -220,11 +223,9 @@ if __name__ == "__main__":
     exitcode = 0
     try:
         go_tree = import_go_tree(args.go_tree_file)
+        all_terms = read_terms(args.terms_file)
 
-        region_terms = read_terms(args.region_file)
-        genome_terms = read_terms(args.genome_file)
-
-        informative = term_overrepresentation(go_tree, genome_terms, region_terms)
+        informative = term_overrepresentation(go_tree, all_terms)
 
         # prio = prioritise_genes(region_terms, genome_terms)
         # for k, v in prio.items():
