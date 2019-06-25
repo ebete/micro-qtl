@@ -123,11 +123,14 @@ if __name__ == "__main__":
 
     exitcode = 0
     try:
-        peaks = get_peaks(args.peaks_file)
-        lookup_table = get_geneid2go(args.mapping_file)
         print("lod", "gi", "go", sep="\t")
+        lookup_table = get_geneid2go(args.mapping_file)
+        peaks = get_peaks(args.peaks_file) + [("all", None, None, None)]
         for lod, chromosome, start, end in peaks:
-            genes_in_region = extract_genes_from_regions(args.gff_file, chromosome, int(start), int(end))
+            if lod == "all":
+                genes_in_region = extract_genes_from_regions(args.gff_file, None, None, None)
+            else:
+                genes_in_region = extract_genes_from_regions(args.gff_file, chromosome, int(start), int(end))
             gi_to_go = get_go_terms(genes_in_region, lookup_table)
             for gi, go in gi_to_go.items():
                 print(lod, gi, "; ".join(go), sep="\t")
