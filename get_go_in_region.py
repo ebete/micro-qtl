@@ -6,6 +6,7 @@ MIT License
 """
 
 import argparse
+import csv
 import gzip
 import logging
 import lzma
@@ -17,6 +18,16 @@ __epilog__ = """
 TBA.
 """
 __version__ = "2019.6.0"
+
+
+def get_peaks(peaks_file):
+    lod_peaks = list()
+    with open(peaks_file, "r", newline="") as f:
+        handle = csv.reader(f, delimiter="\t")
+        next(handle)
+        for record in handle:
+            lod_peaks.append(tuple(record))
+    return lod_peaks
 
 
 def get_geneid2go(idmapping_file):
@@ -64,8 +75,7 @@ def extract_genes_from_regions(gff_file, chr_id, region_start, region_end):
     return set(x["xref"].get("GeneID") for x in matching_records)
 
 
-def get_go_terms(gene_ids, mapping_file):
-    lookup_table = get_geneid2go(mapping_file)
+def get_go_terms(gene_ids, lookup_table):
     return {gi: lookup_table.get(gi, list()) for gi in gene_ids}
 
 
@@ -73,10 +83,12 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description=__description__, epilog=__epilog__)
     # Required arguments
     # Optional arguments
-    parser.add_argument("-c", "--chromosome", metavar="CHR", help="The chromosome ID of the region", default=None)
-    parser.add_argument("-s", "--start", metavar="START", help="The start position of the region", type=int,
-                        default=None)
-    parser.add_argument("-e", "--end", metavar="END", help="The end position of the region", type=int, default=None)
+    # parser.add_argument("-c", "--chromosome", metavar="CHR", help="The chromosome ID of the region", default=None)
+    # parser.add_argument("-s", "--start", metavar="START", help="The start position of the region", type=int,
+    #                     default=None)
+    # parser.add_argument("-e", "--end", metavar="END", help="The end position of the region", type=int, default=None)
+    parser.add_argument("peaks_file", metavar="PEAKS", help="CSV file containing the positions of the LOD peaks of "
+                                                            "the QTL")
     parser.add_argument("-g", "--gff", metavar="FILE", dest="gff_file",
                         help="GFF file (gzipped) of the genome containing the genes", default="genome.gff.gz")
     parser.add_argument("-m", "--map", metavar="FILE", dest="mapping_file",
@@ -111,12 +123,14 @@ if __name__ == "__main__":
 
     exitcode = 0
     try:
-        genes_in_region = extract_genes_from_regions(args.gff_file, args.chromosome, args.start, args.end)
-        gi_to_go = get_go_terms(genes_in_region, args.mapping_file)
-
-        print("gi", "go", sep="\t")
-        for gi, go in gi_to_go.items():
-            print(gi, "; ".join(go), sep="\t")
+        peaks = get_peaks(args.peaks_file)
+        lookup_table = get_geneid2go(args.mapping_file)
+        print("lod", "gi", "go", sep="\t")
+        for lod, chromosome, start, end in peaks:
+            genes_in_region = extract_genes_from_regions(args.gff_file, chromosome, int(start), int(end))
+            gi_to_go = get_go_terms(genes_in_region, lookup_table)
+            for gi, go in gi_to_go.items():
+                print(lod, gi, "; ".join(go), sep="\t")
     # except Exception as ex:
     #     exitcode = 1
     #     logging.error(ex)
