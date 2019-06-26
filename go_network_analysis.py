@@ -52,9 +52,8 @@ def get_go_terms(gi_go_dict):
 
 
 def get_all_ancestors(go_tree, go_term, ancestors):
-    parents = go_tree[go_term].parents
-    for parent in parents:
-        ancestors.append(parent)
+    ancestors.append(go_term)
+    for parent in go_tree[go_term].parents:
         get_all_ancestors(go_tree, parent, ancestors)
 
 
@@ -114,26 +113,28 @@ def lowest_common_ancestor(go_tree, term1, term2):
     return lcs
 
 
-def propagate_scores(go_tree, go_term, scores):
+def propagate_scores(go_tree, go_term, scores, score_to_add):
     for parent in go_tree[go_term].parents:
-        scores[parent] = scores.get(parent, 0) + scores.get(go_term, 0) / go_tree[parent].total_offspring
-        propagate_scores(go_tree, parent, scores)
+        scores[parent] = scores.get(parent, 0) + score_to_add
+        propagate_scores(go_tree, parent, scores, score_to_add)
 
 
-def single_network_analysis(go_tree, found_go_terms):
+def single_network_analysis(go_tree, global_term_occurrence, found_go_terms):
     term_occurrence = dict()
     for term in found_go_terms:
-        term_occurrence[term] = term_occurrence.get(term, 0.) + 1
+        term_occurrence[term] = term_occurrence.get(term, 0) + 1
+    # relative_term_freq = {k: v / global_term_occurrence[k] for k, v in term_occurrence.items()}
 
     network_impact = dict()
     for term, occurrence in term_occurrence.items():
         scores = {term: occurrence}
-        propagate_scores(go_tree, term, scores)
+        propagate_scores(go_tree, term, scores, occurrence)
         if "GO:0008150" not in scores:
             # remove non-BP terms
             continue
         for lineage_term, propagated_score in scores.items():
-            network_impact[lineage_term] = network_impact.get(lineage_term, 0) + propagated_score
+            network_impact[lineage_term] = network_impact.get(lineage_term, 0) \
+                                           + propagated_score / global_term_occurrence[lineage_term]
 
     return network_impact
 
@@ -143,23 +144,39 @@ def make_dot_graph(go_tree, term_impact_scores, graph_name="G"):
     min_v = min(term_impact_scores.values())
     max_v = max(term_impact_scores.values())
 
-    print(f'digraph "{graph_name}"" {{')
+    print(f'digraph "{graph_name}" {{')
 
     print("rankdir = RL;")
     print("node[shape = ellipse];")
-    print("graph[splines = ortho, nodesep = 0.5];")
+    print("graph[splines = ortho, nodesep = 0.5, bgcolor = white];")
+    print()
 
     for node, impact in term_impact_scores.items():
         traverse_tree(go_tree, digraph_list, node)
         scaled_score = (impact - min_v) / (max_v - min_v)
-        hsv_color = f"1.000 1.000 {scaled_score:.3f}" if scaled_score > 0.01 else "0.667 1.000 1.000"
+        hsv_color = f"1.000 1.000 {scaled_score:.3f}"  # if scaled_score > 0.01 else "0.667 1.000 1.000"
         # DOT vertex styling
-        print(f'"{node}" [style = "filled", fillcolor = "{hsv_color}", fontcolor = "white", '
-              f'href="https://www.ebi.ac.uk/QuickGO/term/{node}"];')
+        print(
+            f'"{node}" [style = "filled", fillcolor = "{hsv_color}", fontcolor = "white", '
+            f'href="https://www.ebi.ac.uk/QuickGO/term/{node}", target="_blank", '
+            f'tooltip="{go_tree[node].go_name}"];'
+        )
+
+    print()
 
     # make DAG
-    for v1, v2 in set(digraph_list):
-        print('"{}" -> "{}";'.format(v1, v2))
+    flattend_tree = set(digraph_list)
+    inf_gain = [go_tree[v1].information_content - go_tree[v2].information_content for v1, v2 in flattend_tree]
+    max_gain = max(inf_gain)
+    min_gain = min(inf_gain)
+
+    for v1, v2 in flattend_tree:
+        scaled_inf_gain = (go_tree[v1].information_content - go_tree[v2].information_content - min_gain) / (
+                    max_gain - min_gain)
+        print(
+            f'"{v1}" -> "{v2}" '
+            f'[color = "0.800 1.000 {max(0.1, scaled_inf_gain):.3f}"];'
+        )
 
     print("}")
 
@@ -175,10 +192,10 @@ def traverse_tree(go_tree, tuple_list, current_node):
         traverse_tree(go_tree, tuple_list, parent)
 
 
-def show_top(term_impact_scores, n=10):
-    print("go_term", "score", sep="\t")
+def show_top(go_tree, term_impact_scores, n=10):
+    print("go_term", "go_name", "score", sep="\t")
     for k, v in sorted(term_impact_scores.items(), key=lambda x: x[1], reverse=True)[:n]:
-        print(k, f"{v:.3f}", sep="\t")
+        print(k, go_tree[k].go_name, f"{v:.3f}", sep="\t")
 
 
 def parse_arguments():
@@ -221,15 +238,30 @@ if __name__ == "__main__":
     try:
         go_tree = import_go_tree(args.go_tree_file)
         all_terms = read_terms(args.terms_file)
+
+        global_occurrence = dict()
+        global_lineage_occurrence = dict()
+        for term in get_go_terms(all_terms["all"]):
+            if term not in go_tree:
+                # term has been deprecated
+                continue
+            term_lineage = list()
+            get_all_ancestors(go_tree, term, term_lineage)
+            for ancestor in set(term_lineage):
+                global_lineage_occurrence[ancestor] = global_lineage_occurrence.get(ancestor, 0) + 1
+            global_occurrence[term] = global_occurrence.get(term, 0) + 1
+
         for lod, gi_to_go in all_terms.items():
             if lod == "all":
                 continue
-            term_impact = single_network_analysis(go_tree, get_go_terms(gi_to_go))
+
+            term_impact = single_network_analysis(go_tree, global_lineage_occurrence, get_go_terms(gi_to_go))
             if not term_impact:
                 continue
+
             make_dot_graph(go_tree, term_impact, lod)
-            # show_top(term_impact)
-            # break
+            # show_top(go_tree, term_impact)
+            break
     # except Exception as ex:
     #     exitcode = 1
     #     logging.error(ex)
