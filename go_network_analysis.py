@@ -12,6 +12,8 @@ import lzma
 import pickle
 import sys
 
+from create_go_tree import GoTerm
+
 __description__ = "TBA."
 __epilog__ = """
 TBA.
@@ -128,7 +130,7 @@ def single_network_analysis(go_tree, found_go_terms):
 
     network_impact = dict()
     for term, occurrence in term_occurrence.items():
-        scores = {term: occurrence / max(1, go_tree[term].total_offspring)}
+        scores = {term: occurrence}
         propagate_scores(go_tree, term, scores)
         if "GO:0008150" not in scores:
             # remove non-BP terms
@@ -168,6 +170,11 @@ def traverse_tree(go_tree, tuple_list, current_node):
     for parent in go_node.parents:
         tuple_list.append((current_node, parent))
         traverse_tree(go_tree, tuple_list, parent)
+
+
+def show_top(term_impact_scores, n=10):
+    for k, v in sorted(term_impact_scores.items(), key=lambda x: x[1], reverse=True)[:n]:
+        print(k, f"{v:.3f}", sep="\t")
 
 
 def parse_arguments():
@@ -214,7 +221,8 @@ if __name__ == "__main__":
             if lod == "all":
                 continue
             term_impact = single_network_analysis(go_tree, get_go_terms(gi_to_go))
-            make_dot_graph(go_tree, term_impact)
+            # make_dot_graph(go_tree, term_impact)
+            show_top(term_impact)
             break
     # except Exception as ex:
     #     exitcode = 1
