@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 
+""""
+Copyright (c) 2019 Thom Griffioen
+MIT License
+"""
+
 import csv
 import gzip
 import logging
 import lzma
 import pickle
+import sys
+import argparse
 
-
-# from Bio import Entrez
-
-
-# Entrez.api_key = "f33ee6aed439ad8d9382a53862e70b02cc08"
-# Entrez.email = "t.griffioen@nioo.knaw.nl"
+__description__ = "TBA."
+__epilog__ = """
+TBA.
+"""
+__version__ = "2019.6.0"
 
 
 def get_lod_regions(peaks_file):
@@ -69,11 +75,44 @@ def get_geneid2go(idmapping_file):
         return pickle.load(f)
 
 
-if __name__ == "__main__":
-    logging.basicConfig(format="[%(asctime)s] %(message)s", level=logging.DEBUG)
+def parse_arguments():
+    parser = argparse.ArgumentParser(description=__description__, epilog=__epilog__)
+    # Required arguments
+    parser.add_argument("idmap_file", metavar="ID_MAP", help="File containing the pickled ID mapping from "
+                                                             "make_uniprot_idmapping_db.py")
+    parser.add_argument("gff_file", metavar="GENOME_GFF", help="GFF file (gzipped) of the genome containing the genes")
+    parser.add_argument("peaks_file", metavar="PEAKS", help="CSV file containing the positions of the QTL's LOD peaks")
+    # Optional arguments
+    # Standard arguments
+    parser.add_argument("-v", "--verbose", help="Increase verbosity level", action="count")
+    parser.add_argument("-q", "--silent", help="Suppresses output messages, overriding the --verbose argument",
+                        action="store_true")
+    parser.add_argument("-l", "--log", help="Set the logging output location",
+                        type=argparse.FileType('w'), default=sys.stderr)
+    parser.add_argument("-V", "--version", action="version", version=__version__)
+    return parser.parse_args()
 
-    regions = get_lod_regions("../ril_lod_peaks.csv")
-    geneid2go = get_geneid2go("../../db/geneid2go.pickle.xz")
+
+def set_logging(args):
+    log_level = logging.WARNING
+    if args.silent:
+        log_level = logging.ERROR
+    elif not args.verbose:
+        pass
+    elif args.verbose >= 2:
+        log_level = logging.DEBUG
+    elif args.verbose == 1:
+        log_level = logging.INFO
+    logging.basicConfig(format="[%(asctime)s] %(message)s", level=log_level, stream=args.log)
+    logging.debug("Setting verbosity level to %s" % logging.getLevelName(log_level))
+
+
+if __name__ == "__main__":
+    args = parse_arguments()
+    set_logging(args)
+
+    regions = get_lod_regions(args.peaks_file)
+    geneid2go = get_geneid2go(args.idmap_file)
     logging.debug("\t".join([
         "lod_index",
         "gene_index",
@@ -85,7 +124,7 @@ if __name__ == "__main__":
 
     go_in_peak = dict()
     for region in regions:
-        records = get_genes_from_gff("../../db/GCF_000188115.4_SL3.0_genomic.gff.gz", "refseq2chr.csv", region)
+        records = get_genes_from_gff(args.gff_file, "refseq2chr.csv", region)
         go_per_gene = dict()
         idx = 0
         for record in records:
