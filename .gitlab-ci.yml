@@ -1,0 +1,11 @@
+image: continuumio/miniconda3:latest
+
+before_script:
+  - conda create --yes --name mqtl python=3
+  - source activate mqtl
+
+
+tests:
+  stage: test
+  script:
+    - for f in *.py; do echo "${f}"; python3 "${f}" --version; done
