@@ -115,11 +115,8 @@ def lowest_common_ancestor(go_tree, term1, term2):
 
 
 def propagate_scores(go_tree, go_term, scores):
-    for child in go_tree[go_term].children:
-        # scores[go_term] = scores.get(go_term, 0) + scores.get(child, 0) * (go_tree[child].total_offspring + 1) / \
-        # max(1, go_tree[go_term].total_offspring)
-        scores[go_term] = scores.get(go_term, 0) + 1 / max(1, go_tree[go_term].total_offspring)
     for parent in go_tree[go_term].parents:
+        scores[parent] = scores.get(parent, 0) + scores.get(go_term, 0) / go_tree[parent].total_offspring
         propagate_scores(go_tree, parent, scores)
 
 
@@ -141,18 +138,24 @@ def single_network_analysis(go_tree, found_go_terms):
     return network_impact
 
 
-def make_dot_graph(go_tree, term_impact_scores):
+def make_dot_graph(go_tree, term_impact_scores, graph_name="G"):
     digraph_list = list()
     min_v = min(term_impact_scores.values())
     max_v = max(term_impact_scores.values())
 
-    print("digraph G {")
+    print(f'digraph "{graph_name}"" {{')
+
+    print("rankdir = RL;")
+    print("node[shape = ellipse];")
+    print("graph[splines = ortho, nodesep = 0.5];")
 
     for node, impact in term_impact_scores.items():
         traverse_tree(go_tree, digraph_list, node)
+        scaled_score = (impact - min_v) / (max_v - min_v)
+        hsv_color = f"1.000 1.000 {scaled_score:.3f}" if scaled_score > 0.01 else "0.667 1.000 1.000"
         # DOT vertex styling
-        print('"{}" [style = "filled", fillcolor = "1.000 1.000 {:.3f}" fontcolor = "white"];'
-              .format(node, (impact - min_v) / (max_v - min_v)))
+        print(f'"{node}" [style = "filled", fillcolor = "{hsv_color}", fontcolor = "white", '
+              f'href="https://www.ebi.ac.uk/QuickGO/term/{node}"];')
 
     # make DAG
     for v1, v2 in set(digraph_list):
@@ -173,6 +176,7 @@ def traverse_tree(go_tree, tuple_list, current_node):
 
 
 def show_top(term_impact_scores, n=10):
+    print("go_term", "score", sep="\t")
     for k, v in sorted(term_impact_scores.items(), key=lambda x: x[1], reverse=True)[:n]:
         print(k, f"{v:.3f}", sep="\t")
 
@@ -221,9 +225,11 @@ if __name__ == "__main__":
             if lod == "all":
                 continue
             term_impact = single_network_analysis(go_tree, get_go_terms(gi_to_go))
-            # make_dot_graph(go_tree, term_impact)
-            show_top(term_impact)
-            break
+            if not term_impact:
+                continue
+            make_dot_graph(go_tree, term_impact, lod)
+            # show_top(term_impact)
+            # break
     # except Exception as ex:
     #     exitcode = 1
     #     logging.error(ex)
