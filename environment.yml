@@ -1,0 +1,7 @@
+name: mqtl
+channels:
+  - bioconda
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3

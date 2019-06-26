@@ -1,7 +1,7 @@
 image: continuumio/miniconda3:latest
 
 before_script:
-  - conda create --yes --name mqtl python=3
+  - conda env create --file environment.yml
   - source activate mqtl
 
 
