@@ -12,7 +12,7 @@ import lzma
 import pickle
 import sys
 
-from create_go_tree import GoTerm
+from go_helpers import *
 
 __description__ = "TBA."
 __epilog__ = """
@@ -38,79 +38,11 @@ def read_terms(csv_file):
     return lod_gi_to_go
 
 
-def import_go_tree(import_location):
-    logging.info("Decompressing and importing GO dictionary from %s ...", import_location)
-    with lzma.open(import_location, "rb") as f:
-        return pickle.load(f)
-
-
 def get_go_terms(gi_go_dict):
     all_go = list()
     for go_terms in gi_go_dict.values():
         all_go += go_terms
     return all_go
-
-
-def get_all_ancestors(go_tree, go_term, ancestors):
-    ancestors.append(go_term)
-    for parent in go_tree[go_term].parents:
-        get_all_ancestors(go_tree, parent, ancestors)
-
-
-def go_lin_similarity(go_tree, term1, term2):
-    """
-    http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.55.1832&rep=rep1&type=pdf
-
-    :param go_tree:
-    :param term1:
-    :param term2:
-    :return: Lin's term similarity score.
-    """
-    intersecting_ancestors = lowest_common_ancestor(go_tree, term1, term2)
-    if not intersecting_ancestors:
-        return 0
-    lca = intersecting_ancestors[0]
-    # get the LCS with the highest IC
-    for term in set(intersecting_ancestors):
-        if go_tree[lca].information_content < go_tree[term].information_content:
-            lca = term
-
-    # calculate Lin's similarity score
-    return 2 * go_tree[lca].information_content / \
-           (go_tree[term1].information_content + go_tree[term2].information_content)
-
-
-def lowest_common_ancestor(go_tree, term1, term2):
-    """
-    Find the lowest common ancestor (LCS) of all paths in the GO DAG.
-
-    :param go_tree:
-    :param term1:
-    :param term2:
-    :return: List of LCS's found on each possible path.
-    """
-    go_term1 = go_tree[term1]
-    go_term2 = go_tree[term2]
-
-    if go_term1 == go_term2:
-        return [term1]
-
-    lcs = list()
-    # iterate over parents of the most specific node (lower in tree)
-    if go_term1.information_content > go_term2.information_content:
-        for parent in go_term1.parents:
-            subsumer = lowest_common_ancestor(go_tree, parent, go_term2.go_id)
-            if not subsumer:
-                continue
-            lcs += subsumer
-    else:
-        for parent in go_term2.parents:
-            subsumer = lowest_common_ancestor(go_tree, go_term1.go_id, parent)
-            if not subsumer:
-                continue
-            lcs += subsumer
-
-    return lcs
 
 
 def propagate_scores(go_tree, go_term, scores, score_to_add):
@@ -120,18 +52,16 @@ def propagate_scores(go_tree, go_term, scores, score_to_add):
 
 
 def single_network_analysis(go_tree, global_term_occurrence, found_go_terms):
-    term_occurrence = dict()
-    for term in found_go_terms:
-        term_occurrence[term] = term_occurrence.get(term, 0) + 1
+    term_occurrence = get_value_frequency(found_go_terms)
     # relative_term_freq = {k: v / global_term_occurrence[k] for k, v in term_occurrence.items()}
 
     network_impact = dict()
     for term, occurrence in term_occurrence.items():
         scores = {term: occurrence}
         propagate_scores(go_tree, term, scores, occurrence)
-        if "GO:0008150" not in scores:
+        # if "GO:0008150" not in scores:
             # remove non-BP terms
-            continue
+        # continue
         for lineage_term, propagated_score in scores.items():
             network_impact[lineage_term] = network_impact.get(lineage_term, 0) \
                                            + propagated_score / global_term_occurrence[lineage_term]
@@ -144,7 +74,7 @@ def make_dot_graph(go_tree, term_impact_scores, graph_name="G"):
     min_v = min(term_impact_scores.values())
     max_v = max(term_impact_scores.values())
 
-    print(f'digraph "{graph_name}" {{')
+    print(f'digraph "Peak {graph_name}" {{')
 
     print("rankdir = RL;")
     print("node[shape = ellipse];")
@@ -239,17 +169,10 @@ if __name__ == "__main__":
         go_tree = import_go_tree(args.go_tree_file)
         all_terms = read_terms(args.terms_file)
 
-        global_occurrence = dict()
-        global_lineage_occurrence = dict()
-        for term in get_go_terms(all_terms["all"]):
-            if term not in go_tree:
-                # term has been deprecated
-                continue
-            term_lineage = list()
-            get_all_ancestors(go_tree, term, term_lineage)
-            for ancestor in set(term_lineage):
-                global_lineage_occurrence[ancestor] = global_lineage_occurrence.get(ancestor, 0) + 1
-            global_occurrence[term] = global_occurrence.get(term, 0) + 1
+        genome_go_terms = get_go_terms(all_terms["all"])
+
+        global_occurrence = get_value_frequency(genome_go_terms)
+        global_lineage_occurrence = go_lineage_frequencies(go_tree, genome_go_terms)
 
         for lod, gi_to_go in all_terms.items():
             if lod == "all":
