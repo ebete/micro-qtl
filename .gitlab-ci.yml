@@ -1,6 +1,7 @@
 image: continuumio/miniconda3:latest
 
 before_script:
+  - apt-get update -qq && apt-get install -q --yes pylint
   - conda env create --file environment.yml --quiet
   - source activate mqtl
 
@@ -8,4 +9,5 @@ before_script:
 tests:
   stage: test
   script:
-    - for f in *.py; do echo "${f}"; python3 "${f}" --version; done
+    - pylint --output-format=text *.py
+#    - for f in *.py; do echo "${f}"; python3 "${f}" --version; done
