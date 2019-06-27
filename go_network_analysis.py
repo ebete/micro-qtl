@@ -171,20 +171,27 @@ if __name__ == "__main__":
 
         genome_go_terms = get_go_terms(all_terms["all"])
 
-        global_occurrence = get_value_frequency(genome_go_terms)
-        global_lineage_occurrence = go_lineage_frequencies(go_tree, genome_go_terms)
+        # global_occurrence = get_value_frequency(genome_go_terms)
+        # global_lineage_occurrence = go_lineage_frequencies(go_tree, genome_go_terms)
 
+        lod_occurrence = dict()
         for lod, gi_to_go in all_terms.items():
             if lod == "all":
                 continue
+            ancestors = set()
+            for term in get_go_terms(gi_to_go):
+                if term not in go_tree:
+                    continue
+                get_all_ancestors(go_tree, term, ancestors)
+            lod_occurrence[lod] = ancestors
 
-            term_impact = single_network_analysis(go_tree, global_lineage_occurrence, get_go_terms(gi_to_go))
-            if not term_impact:
-                continue
-
-            make_dot_graph(go_tree, term_impact, lod)
+            # term_impact = single_network_analysis(go_tree, global_lineage_occurrence, get_go_terms(gi_to_go))
+            # if not term_impact:
+            #     continue
+            #
+            # make_dot_graph(go_tree, term_impact, lod)
             # show_top(go_tree, term_impact)
-            break
+        pass
     # except Exception as ex:
     #     exitcode = 1
     #     logging.error(ex)

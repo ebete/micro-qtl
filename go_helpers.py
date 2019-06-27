@@ -171,9 +171,9 @@ def go_lin_similarity(go_tree, term1, term2):
     intersecting_ancestors = lowest_common_ancestor(go_tree, term1, term2)
     if not intersecting_ancestors:
         return 0.
-    lca = intersecting_ancestors[0]
+    lca = intersecting_ancestors.pop()
     # get the LCS with the highest IC
-    for term in set(intersecting_ancestors):
+    for term in intersecting_ancestors:
         if go_tree[lca].information_content < go_tree[term].information_content:
             lca = term
 
@@ -195,29 +195,29 @@ def lowest_common_ancestor(go_tree, term1, term2):
     :type term2: str
     :param term2: The second GO term.
 
-    :rtype: list[str]
-    :return: List of LCA's found on each possible path.
+    :rtype: set[str]
+    :return: Set of LCA's found on each possible path.
     """
     go_term1 = go_tree[term1]
     go_term2 = go_tree[term2]
 
     if go_term1 == go_term2:
-        return [term1]
+        return {term1}
 
-    lca = list()
+    lca = set()
     # iterate over parents of the most specific node (lower in tree)
     if go_term1.information_content > go_term2.information_content:
         for parent in go_term1.parents:
             subsumer = lowest_common_ancestor(go_tree, parent, go_term2.go_id)
             if not subsumer:
                 continue
-            lca += subsumer
+            lca.update(subsumer)
     else:
         for parent in go_term2.parents:
             subsumer = lowest_common_ancestor(go_tree, go_term1.go_id, parent)
             if not subsumer:
                 continue
-            lca += subsumer
+            lca.update(subsumer)
 
     return lca
 
@@ -232,11 +232,11 @@ def get_all_ancestors(go_tree, go_term, ancestors):
     :type go_term: str
     :param go_term: GO term to find all ancestor terms of.
 
-    :type ancestors: list[str]
-    :param ancestors: List where all ancestor terms will be appended to. The
-        given GO term will also be added to this list.
+    :type ancestors: set[str]
+    :param ancestors: Set where all ancestor terms will be added to. The
+        given GO term will also be added to this set.
     """
-    ancestors.append(go_term)
+    ancestors.add(go_term)
     for parent in go_tree[go_term].parents:
         get_all_ancestors(go_tree, parent, ancestors)
 
@@ -276,9 +276,9 @@ def go_lineage_frequencies(go_tree, go_terms):
             # GO term has been deprecated
             continue
 
-        term_lineage = list()
+        term_lineage = set()
         get_all_ancestors(go_tree, term, term_lineage)
 
-        for ancestor in set(term_lineage):
+        for ancestor in term_lineage:
             lineage_frequency[ancestor] = lineage_frequency.get(ancestor, 0) + 1
     return lineage_frequency
