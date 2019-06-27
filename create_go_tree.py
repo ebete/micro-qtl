@@ -13,74 +13,13 @@ import pickle
 import sys
 from math import log2
 
+from go_helpers import *
+
 __description__ = "Create a tree-like structure of the Gene Ontology flat-file."
 __epilog__ = """
 TBA.
 """
 __version__ = "2019.6.0"
-
-go_roots = {
-    "biological_process": "GO:0008150",
-    "cellular_component": "GO:0005575",
-    "molecular_function": "GO:0003674"
-}
-
-
-class GoTerm(object):
-    """
-    A doubly linked list of GO records containing some extra metadata of the
-    given GO term.
-    """
-    def __init__(self, go_id, go_name=None, go_def=None):
-        if go_id is None:
-            raise ValueError("go_id cannot be None.")
-
-        self.go_id = go_id
-        self.go_name = go_name
-        self.go_def = go_def
-        self.children = list()
-        self.parents = list()
-        self.total_offspring = 0
-        self.information_content = 0.
-
-    def __hash__(self):
-        # we assume that go_id is unique for all instances (should be the case anyway)
-        return hash(self.go_id)
-
-    def __repr__(self):
-        return 'GoTerm(go_id="{}", go_name="{}", go_def="{}", children={}, parents={}, total_offspring={}, ' \
-               'information_content={})'.format(
-            self.go_id, self.go_name, self.go_def, len(self.children), len(self.parents), self.total_offspring,
-            self.information_content
-        )
-
-    def __str__(self):
-        return '{} [{}]'.format(
-            self.go_id, self.go_name
-        )
-
-    def __eq__(self, other):
-        if not isinstance(other, self.__class__):
-            return False
-        return self.go_id == other.go_id
-
-    def set_name(self, go_name):
-        self.go_name = go_name
-        return self
-
-    def set_definition(self, go_def):
-        self.go_def = go_def
-        return self
-
-    def add_parent(self, parent_term):
-        if parent_term not in self.parents:
-            self.parents.append(parent_term)
-        return self
-
-    def add_child(self, child_term):
-        if child_term not in self.children:
-            self.children.append(child_term)
-        return self
 
 
 def parse_go_tree(go_file):
@@ -181,12 +120,6 @@ def information_content_calculation(go_tree, go_term, total_terms):
     term_data.information_content = -log2((term_data.total_offspring + 1) / total_terms)
     for child in term_data.children:
         information_content_calculation(go_tree, child, total_terms)
-
-
-def export_go_tree(go_tree, export_location):
-    logging.info("Compressing and exporting GO dictionary to %s ...", export_location)
-    with lzma.open(export_location, "wb") as f:
-        pickle.dump(go_tree, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def parse_arguments():
