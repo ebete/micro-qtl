@@ -82,13 +82,13 @@ def get_go_terms(gene_ids, lookup_table):
 def parse_arguments():
     parser = argparse.ArgumentParser(description=__description__, epilog=__epilog__)
     # Required arguments
+    parser.add_argument("peaks_file", metavar="PEAKS", help="CSV file containing the positions of the LOD peaks of "
+                                                            "the QTL")
     # Optional arguments
     # parser.add_argument("-c", "--chromosome", metavar="CHR", help="The chromosome ID of the region", default=None)
     # parser.add_argument("-s", "--start", metavar="START", help="The start position of the region", type=int,
     #                     default=None)
     # parser.add_argument("-e", "--end", metavar="END", help="The end position of the region", type=int, default=None)
-    parser.add_argument("peaks_file", metavar="PEAKS", help="CSV file containing the positions of the LOD peaks of "
-                                                            "the QTL")
     parser.add_argument("-g", "--gff", metavar="FILE", dest="gff_file",
                         help="GFF file (gzipped) of the genome containing the genes", default="genome.gff.gz")
     parser.add_argument("-m", "--map", metavar="FILE", dest="mapping_file",

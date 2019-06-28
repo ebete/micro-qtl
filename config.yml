@@ -1,0 +1,8 @@
+project: "micro_qtl"
+static-files:
+  idmap: "/mnt/nfs/bioinfdata/home/NIOO/thomg/db/idmapping_selected.tab.gz"
+  refseq: "/mnt/nfs/bioinfdata/home/NIOO/thomg/db/GCF_000188115.4_SL3.0_genomic.gff.gz"
+  go: "/mnt/nfs/bioinfdata/home/NIOO/thomg/db/go-basic.obo.gz"
+  lod-regions: "/mnt/nfs/bioinfdata/home/NIOO/thomg/micro_qtl/lod_peaks.csv"
+id-convert:
+  from: "geneid"
