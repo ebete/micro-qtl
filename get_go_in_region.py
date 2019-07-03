@@ -26,7 +26,7 @@ def get_peaks(peaks_file):
         handle = csv.reader(f, delimiter="\t")
         next(handle)
         for record in handle:
-            lod_peaks.append(tuple(record))
+            lod_peaks.append((record[0], record[1], int(record[2]), int(record[3])))
     return lod_peaks
 
 
@@ -127,10 +127,7 @@ if __name__ == "__main__":
         lookup_table = get_geneid2go(args.mapping_file)
         peaks = get_peaks(args.peaks_file) + [("all", None, None, None)]
         for lod, chromosome, start, end in peaks:
-            if lod == "all":
-                genes_in_region = extract_genes_from_regions(args.gff_file, None, None, None)
-            else:
-                genes_in_region = extract_genes_from_regions(args.gff_file, chromosome, int(start), int(end))
+            genes_in_region = extract_genes_from_regions(args.gff_file, chromosome, start, end)
             gi_to_go = get_go_terms(genes_in_region, lookup_table)
             for gi, go in gi_to_go.items():
                 print(lod, gi, "; ".join(go), sep="\t")
