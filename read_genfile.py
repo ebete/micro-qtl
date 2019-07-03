@@ -67,6 +67,18 @@ if __name__ == "__main__":
     chrom, snps, cm, rils = read_gen(sys.argv[1])
 
     print("lod_id", "chr", "start", "end", sep="\t")
-    for i in range(1, int(sys.argv[2]) + 1):
+    prev_snps = list()
+    i = 1
+    while i < int(sys.argv[2]) + 1:
         snp1, snp2 = get_random_interval(chrom, snps, cm, rils, 10.0)
+        overlap = False
+        for s1, s2 in prev_snps:
+            if s1 < snp1 < s2 or s1 < snp2 < s2:
+                overlap = True
+                break
+        if overlap:
+            continue
+
         print(i, chrmap[chrom[snp1]], snps[snp1], snps[snp2], sep="\t")
+        prev_snps.append((snp1, snp2))
+        i += 1
