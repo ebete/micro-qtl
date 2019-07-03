@@ -18,16 +18,17 @@ localrules: all
 
 # project constants
 PROJECT = config["project"]
+BOOTSTRAPS = list(range(10))
 
 # output files
 OUTFILES = list()
 # output of GO term prioritisation
-OUTFILES.append("{project}/prioritised_terms.csv")
+OUTFILES.append("{project}/prioritised_terms_{bootstrap_rounds}.svg")
 
 # rule to target all output files
 rule all:
     input:
-         expand(OUTFILES, project=PROJECT)
+         expand(OUTFILES, project=PROJECT, bootstrap_rounds=BOOTSTRAPS)
 
 rule make_id_map:
     output:
@@ -43,19 +44,32 @@ rule make_id_map:
          'python3 make_uniprot_idmapping_db.py -vv --from "{params.from_id}" --to "{params.to_id}" "{params.map_file}" '
     '"{output}"'
 
-rule genes_from_peaks:
-    input:
-         rules.make_id_map.output
+rule make_random_peaks:
     output:
-          "{project}/genes_in_peaks.csv"
+          "{project}/peaks_{bootstrap_rounds}.csv"
     threads: 1
     conda:
          "environment.yml"
     params:
-          genome_gff=config["static-files"]["refseq"],
-          peaks_file=config["static-files"]["lod-regions"]
+          gen_file=config["static-files"]["genfile"],
+          peaks=3
     shell:
-         'python3 get_go_in_region.py -vv -g "{params.genome_gff}" -m "{input}" "{params.peaks_file}" > "{output}"'
+         'python3 read_genfile.py "{params.gen_file}" "{params.peaks}" > "{output}"'
+
+rule genes_from_peaks:
+    input:
+         id_map=rules.make_id_map.output,
+         peaks_file=rules.make_random_peaks.output
+    output:
+          "{project}/genes_in_peaks_{bootstrap_rounds}.csv"
+    threads: 1
+    conda:
+         "environment.yml"
+    params:
+          genome_gff=config["static-files"]["refseq"]
+          # peaks_file=config["static-files"]["lod-regions"]
+    shell:
+         'python3 get_go_in_region.py -vv -g "{params.genome_gff}" -m "{input.id_map}" "{input.peaks_file}" > "{output}"'
 
 rule make_go_tree:
     output:
@@ -73,9 +87,9 @@ rule go_network_analysis:
          go_tree=rules.make_go_tree.output,
          peak_terms=rules.genes_from_peaks.output
     output:
-          "{project}/prioritised_terms.csv"
+          "{project}/prioritised_terms_{bootstrap_rounds}.svg"
     threads: 1
     conda:
          "environment.yml"
     shell:
-         'python3 go_network_analysis.py -vv "{input.go_tree}" "{input.peak_terms}" > "{output}"'
+         'python3 go_network_analysis.py -vv "{input.go_tree}" "{input.peak_terms}" | dot -Tsvg > "{output}"'

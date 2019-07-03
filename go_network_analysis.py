@@ -73,6 +73,8 @@ def make_dot_graph(go_tree, term_impact_scores, graph_name="G"):
     digraph_list = list()
     min_v = min(term_impact_scores.values())
     max_v = max(term_impact_scores.values())
+    if min_v == max_v:
+        max_v += 1
 
     print(f'digraph "Peak {graph_name}" {{')
 
@@ -175,14 +177,16 @@ if __name__ == "__main__":
         # global_lineage_occurrence = go_lineage_frequencies(go_tree, genome_go_terms)
 
         lod_occurrence = dict()
+        term_occurrence = dict()
         for lod, gi_to_go in all_terms.items():
             if lod == "all":
                 continue
             ancestors = set()
-            for term in get_go_terms(gi_to_go):
-                if term not in go_tree:
-                    continue
+            terms_in_region = [x for x in get_go_terms(gi_to_go) if x in go_tree]
+            for term in terms_in_region:
                 get_all_ancestors(go_tree, term, ancestors)
+            for term in set(terms_in_region):
+                term_occurrence[term] = term_occurrence.get(term, 0) + 1
             lod_occurrence[lod] = ancestors
 
             # term_impact = single_network_analysis(go_tree, global_lineage_occurrence, get_go_terms(gi_to_go))
@@ -191,7 +195,7 @@ if __name__ == "__main__":
             #
             # make_dot_graph(go_tree, term_impact, lod)
             # show_top(go_tree, term_impact)
-        pass
+        make_dot_graph(go_tree, term_occurrence)
     # except Exception as ex:
     #     exitcode = 1
     #     logging.error(ex)
