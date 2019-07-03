@@ -126,7 +126,7 @@ def traverse_tree(go_tree, tuple_list, current_node):
 
 def show_top(go_tree, term_impact_scores, n=10):
     print("go_term", "go_name", "score", sep="\t")
-    for k, v in sorted(term_impact_scores.items(), key=lambda x: x[1], reverse=True)[:n]:
+    for k, v in sorted(term_impact_scores.items(), key=lambda x: (x[1], x[0]), reverse=True)[:n]:
         print(k, go_tree[k].go_name, f"{v:.3f}", sep="\t")
 
 
@@ -173,7 +173,7 @@ if __name__ == "__main__":
 
         genome_go_terms = get_go_terms(all_terms["all"])
 
-        # global_occurrence = get_value_frequency(genome_go_terms)
+        global_occurrence = get_value_frequency(genome_go_terms)
         # global_lineage_occurrence = go_lineage_frequencies(go_tree, genome_go_terms)
 
         lod_occurrence = dict()
@@ -186,7 +186,8 @@ if __name__ == "__main__":
             for term in terms_in_region:
                 get_all_ancestors(go_tree, term, ancestors)
             for term in set(terms_in_region):
-                term_occurrence[term] = term_occurrence.get(term, 0) + 1
+                term_occurrence[term] = term_occurrence.get(term, 0) + 1 / (
+                            len(all_terms) - 1)  # / global_occurrence[term]
             lod_occurrence[lod] = ancestors
 
             # term_impact = single_network_analysis(go_tree, global_lineage_occurrence, get_go_terms(gi_to_go))
@@ -194,8 +195,8 @@ if __name__ == "__main__":
             #     continue
             #
             # make_dot_graph(go_tree, term_impact, lod)
-            # show_top(go_tree, term_impact)
-        make_dot_graph(go_tree, term_occurrence)
+        show_top(go_tree, term_occurrence, n=10)
+        # make_dot_graph(go_tree, term_occurrence)
     # except Exception as ex:
     #     exitcode = 1
     #     logging.error(ex)

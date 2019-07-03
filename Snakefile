@@ -18,12 +18,12 @@ localrules: all
 
 # project constants
 PROJECT = config["project"]
-BOOTSTRAPS = list(range(10))
+BOOTSTRAPS = list(range(50))
 
 # output files
 OUTFILES = list()
 # output of GO term prioritisation
-OUTFILES.append("{project}/prioritised_terms_{bootstrap_rounds}.svg")
+OUTFILES.append("{project}/prioritised_terms_{bootstrap_rounds}.txt")
 
 # rule to target all output files
 rule all:
@@ -87,9 +87,10 @@ rule go_network_analysis:
          go_tree=rules.make_go_tree.output,
          peak_terms=rules.genes_from_peaks.output
     output:
-          "{project}/prioritised_terms_{bootstrap_rounds}.svg"
+          "{project}/prioritised_terms_{bootstrap_rounds}.txt"
     threads: 1
     conda:
          "environment.yml"
     shell:
-         'python3 go_network_analysis.py -vv "{input.go_tree}" "{input.peak_terms}" | dot -Tsvg > "{output}"'
+         #         'python3 go_network_analysis.py -vv "{input.go_tree}" "{input.peak_terms}" | dot -Tsvg > "{output}"'
+         'python3 go_network_analysis.py -vv "{input.go_tree}" "{input.peak_terms}" > "{output}"'
