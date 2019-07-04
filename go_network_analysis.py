@@ -124,10 +124,11 @@ def traverse_tree(go_tree, tuple_list, current_node):
         traverse_tree(go_tree, tuple_list, parent)
 
 
-def show_top(go_tree, term_impact_scores, n=10):
-    print("go_term", "go_name", "score", sep="\t")
-    for k, v in sorted(term_impact_scores.items(), key=lambda x: (x[1], x[0]), reverse=True)[:n]:
-        print(k, go_tree[k].go_name, f"{v:.3f}", sep="\t")
+def show_top(go_tree, term_impact_scores, relative_occurrence, n=10):
+    print("go_term", "go_name", "included_in_peaks", "global_fraction_in_peaks", sep="\t")
+    for k, v in sorted(term_impact_scores.items(), key=lambda x: (x[1], relative_occurrence[x[0]], x[0]), reverse=True)[
+                :n]:
+        print(k, go_tree[k].go_name, f"{v:.3f}", f"{relative_occurrence[k]:.3f}", sep="\t")
 
 
 def parse_arguments():
@@ -178,6 +179,7 @@ if __name__ == "__main__":
 
         lod_occurrence = dict()
         term_occurrence = dict()
+        relative_occurrence = dict()
         for lod, gi_to_go in all_terms.items():
             if lod == "all":
                 continue
@@ -185,9 +187,9 @@ if __name__ == "__main__":
             terms_in_region = [x for x in get_go_terms(gi_to_go) if x in go_tree]
             for term in terms_in_region:
                 get_all_ancestors(go_tree, term, ancestors)
+                relative_occurrence[term] = relative_occurrence.get(term, 0) + 1 / global_occurrence[term]
             for term in set(terms_in_region):
-                term_occurrence[term] = term_occurrence.get(term, 0) + 1 / (
-                            len(all_terms) - 1)  # / global_occurrence[term]
+                term_occurrence[term] = term_occurrence.get(term, 0) + 1 / (len(all_terms) - 1)
             lod_occurrence[lod] = ancestors
 
             # term_impact = single_network_analysis(go_tree, global_lineage_occurrence, get_go_terms(gi_to_go))
@@ -195,7 +197,7 @@ if __name__ == "__main__":
             #     continue
             #
             # make_dot_graph(go_tree, term_impact, lod)
-        show_top(go_tree, term_occurrence, n=10)
+        show_top(go_tree, term_occurrence, relative_occurrence, n=10)
         # make_dot_graph(go_tree, term_occurrence)
     # except Exception as ex:
     #     exitcode = 1
