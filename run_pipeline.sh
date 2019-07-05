@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-CORES=${1:-$(grep -c ^processor /proc/cpuinfo)}
+CORES="${1:-$(grep -c ^processor /proc/cpuinfo)}"
+SNAKEMAKE_PARAMS=${@:2}
 
 dir=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
 cd "${dir}"
@@ -27,4 +28,4 @@ check_updates() {
 
 check_updates 2>/dev/null
 
-snakemake --use-conda -p --cores "${CORES}"
+snakemake --use-conda -p --cores "${CORES}" ${SNAKEMAKE_PARAMS}
