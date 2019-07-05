@@ -21,6 +21,15 @@ __version__ = "2019.6.0"
 
 
 def get_peaks(peaks_file):
+    """
+    Read the QTL peak locations from a CSV file.
+
+    :type peaks_file: str
+    :param peaks_file: The location of the CSV file.
+
+    :rtype: list[tuple[str, str, int, int]]
+    :return: A list of tuples containing the LOD, chromosome, start, and end.
+    """
     lod_peaks = list()
     with open(peaks_file, "r", newline="") as f:
         handle = csv.reader(f, delimiter="\t")

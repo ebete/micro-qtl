@@ -20,10 +20,62 @@ __description__ = "TBA."
 __epilog__ = """
 TBA.
 """
-__version__ = "2019.6.0"
+__version__ = "2019.7.0"
+
+
+def run_analysis(args):
+    # process input files
+    lod_peaks = {x[0]: x[1:] for x in get_peaks(args.peaks_file)}
+    go_tree = import_go_tree(args.go_tree_file)
+    all_terms = read_terms(args.terms_file)
+
+    # split genome terms from peak terms
+    genome_go_terms = dict()
+    peak_go_terms = list()
+    terms_in_peak = dict()
+    total_peak_nt_length = 0
+    for lod, gi_to_go in all_terms.items():
+        if lod == "all":  # terms of the entire genome
+            genome_go_terms = get_go_terms(gi_to_go)
+            continue
+
+        terms_in_peak[lod] = get_go_terms(gi_to_go)
+        peak_go_terms += get_go_terms(gi_to_go)
+        total_peak_nt_length += lod_peaks[lod][2] - lod_peaks[lod][1]
+
+    # calculate background term rates
+    genome_nt_length = 800e6
+    global_occurrence = get_value_frequency(genome_go_terms)
+    global_density = {k: v / genome_nt_length for k, v in global_occurrence.items()}
+    global_lineage_occurrence = go_lineage_frequencies(go_tree, genome_go_terms)
+    global_lineage_density = {k: v / genome_nt_length for k, v in global_lineage_occurrence.items()}
+    # peak region term rates
+    local_occurrence = get_value_frequency(peak_go_terms)
+    local_density = {k: v / total_peak_nt_length for k, v in local_occurrence.items()}
+    local_lineage_occurrence = go_lineage_frequencies(go_tree, peak_go_terms)
+    local_lineage_density = {k: v / total_peak_nt_length for k, v in local_lineage_occurrence.items()}
+
+    # compare background rates to QTL rates
+    lfd_density = {k: log2(v / global_density[k]) for k, v in local_density.items()}
+    lfd_lineage_density = {k: log2(v / global_lineage_density[k]) for k, v in local_lineage_density.items()}
+
+    # show_top(go_tree, lfd_density, n=10, descending=False)
+    show_top(go_tree, lfd_lineage_density, n=10, descending=True)
+
+    pass
 
 
 def read_terms(csv_file):
+    """
+    Read the GI terms and their associated GO terms from the given CSV file.
+
+    :type csv_file: str
+    :param csv_file: The CSV file containing the GI and GO terms.
+
+    :rtype: dict[str, dict[str, list[str]]]
+    :return: A dictionary containing a list of all the GO terms of a GI per
+        found LOD peak.
+    """
     lod_gi_to_go = dict()
 
     logging.info("Reading GI/GO tuples from %s ...", csv_file)
@@ -41,34 +93,20 @@ def read_terms(csv_file):
 
 
 def get_go_terms(gi_go_dict):
+    """
+    Extract all GO terms (with duplicates) from the given GI to GO term
+    dictionary.
+
+    :type gi_go_dict: dict[str, list[str]]
+    :param gi_go_dict: Dictionary containing the GO terms associated to the GI.
+
+    :rtype: list[str]
+    :return: A list containing all found GO terms.
+    """
     all_go = list()
     for go_terms in gi_go_dict.values():
         all_go += go_terms
     return all_go
-
-
-def propagate_scores(go_tree, go_term, scores, score_to_add):
-    for parent in go_tree[go_term].parents:
-        scores[parent] = scores.get(parent, 0) + score_to_add
-        propagate_scores(go_tree, parent, scores, score_to_add)
-
-
-def single_network_analysis(go_tree, global_term_occurrence, found_go_terms):
-    term_occurrence = get_value_frequency(found_go_terms)
-    # relative_term_freq = {k: v / global_term_occurrence[k] for k, v in term_occurrence.items()}
-
-    network_impact = dict()
-    for term, occurrence in term_occurrence.items():
-        scores = {term: occurrence}
-        propagate_scores(go_tree, term, scores, occurrence)
-        # if "GO:0008150" not in scores:
-        # remove non-BP terms
-        # continue
-        for lineage_term, propagated_score in scores.items():
-            network_impact[lineage_term] = network_impact.get(lineage_term, 0) \
-                                           + propagated_score / global_term_occurrence[lineage_term]
-
-    return network_impact
 
 
 def make_dot_graph(go_tree, term_impact_scores, graph_name="G"):
@@ -116,6 +154,20 @@ def make_dot_graph(go_tree, term_impact_scores, graph_name="G"):
 
 
 def traverse_tree(go_tree, tuple_list, current_node):
+    """
+    Go up the GO tree starting at the given node while adding all connections
+    to the given list.
+
+    :type go_tree: dict[str, GoTerm]
+    :param go_tree: The GO tree dictionary.
+
+    :type tuple_list: list[tuple]
+    :param tuple_list: List containing tuples of all found linked terms
+        (child -> parent).
+
+    :type current_node: str
+    :param current_node: The node to get all the parent terms from.
+    """
     go_node = go_tree[current_node]
 
     if not go_node.parents:
@@ -126,11 +178,26 @@ def traverse_tree(go_tree, tuple_list, current_node):
         traverse_tree(go_tree, tuple_list, parent)
 
 
-def show_top(go_tree, term_impact_scores, relative_occurrence, n=10):
-    # print("go_term", "go_name", "background_density_factor", "global_fraction_in_peaks", sep="\t")
-    for k, v in sorted(term_impact_scores.items(), key=lambda x: (x[1], relative_occurrence[x[0]], x[0]), reverse=True)[
-                :n]:
-        print(k, go_tree[k].go_name, f"{v:.3f}", f"{relative_occurrence[k]:.3f}", sep="\t")
+def show_top(go_tree, term_scores, n=None, descending=True):
+    """
+    Print the top n scoring terms in a tab-delimited table.
+
+    :type go_tree: dict[str, GoTerm]
+    :param go_tree: The GO tree dictionary.
+
+    :type term_scores: dict[str, float]
+    :param term_scores: Dictionary containing the GO terms and the associated
+        score.
+
+    :type n: int
+    :param n: Show only the top n terms.
+
+    :type descending: bool
+    :param descending: Print the GO term scores in descending order.
+    """
+    print("go_term", "go_name", "scores", sep="\t")
+    for k, v in sorted(term_scores.items(), key=lambda x: (x[1], x[0]), reverse=descending)[:n]:
+        print(k, go_tree[k].go_name, f"{v:.3f}", sep="\t")
 
 
 def parse_arguments():
@@ -173,55 +240,7 @@ if __name__ == "__main__":
 
     exitcode = 0
     try:
-        lod_peaks = {x[0]: x[1:] for x in get_peaks(args.peaks_file)}
-
-        go_tree = import_go_tree(args.go_tree_file)
-        all_terms = read_terms(args.terms_file)
-
-        genome_go_terms = get_go_terms(all_terms["all"])
-
-        genome_nt_length = 800e6
-        global_occurrence = get_value_frequency(genome_go_terms)
-        global_density = {k: v / genome_nt_length for k, v in global_occurrence.items()}
-        global_lineage_occurrence = go_lineage_frequencies(go_tree, genome_go_terms)
-        global_lineage_density = {k: v / genome_nt_length for k, v in global_lineage_occurrence.items()}
-
-        lod_occurrence = dict()
-        term_occurrence = dict()
-        peak_term_density = dict()
-        peak_term_lineage_density = dict()
-        relative_occurrence = dict()
-        for lod, gi_to_go in all_terms.items():
-            if lod == "all":
-                continue
-
-            peak_width = lod_peaks[lod][2] - lod_peaks[lod][1]
-
-            ancestors = set()
-            terms_in_region = [x for x in get_go_terms(gi_to_go) if x in go_tree]
-            for term in terms_in_region:
-                get_all_ancestors(go_tree, term, ancestors)
-                relative_occurrence[term] = relative_occurrence.get(term, 0) + 1 / global_occurrence[term]
-                peak_term_density[term] = peak_term_density.get(term, 0.) + 1 / peak_width
-            for ancestor, count in go_lineage_frequencies(go_tree, terms_in_region).items():
-                peak_term_lineage_density[ancestor] = peak_term_lineage_density.get(ancestor, 0.) + count / peak_width
-                term_occurrence[ancestor] = term_occurrence.get(ancestor, 0) + 1 / (len(all_terms) - 1)
-            lod_occurrence[lod] = ancestors
-
-            # term_impact = single_network_analysis(go_tree, global_lineage_occurrence, get_go_terms(gi_to_go))
-            # if not term_impact:
-            #     continue
-            #
-            # make_dot_graph(go_tree, term_impact, lod)
-        dense_peak_terms = {k: log2(v / global_density[k]) for k, v in peak_term_density.items()}
-        dense_peak_lineage_terms = {k: log2(v / global_lineage_density[k]) for k, v in
-                                    peak_term_lineage_density.items()}
-        show_top(go_tree, term_occurrence, dense_peak_lineage_terms, n=10)
-        # make_dot_graph(go_tree, term_occurrence)
-    # except Exception as ex:
-    #     exitcode = 1
-    #     logging.error(ex)
-    #     logging.debug(format_exc())
+        run_analysis(args)
     finally:
         logging.debug("Shutting down logging system ...")
         logging.shutdown()
