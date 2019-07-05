@@ -85,7 +85,8 @@ rule make_go_tree:
 rule go_network_analysis:
     input:
          go_tree=rules.make_go_tree.output,
-         peak_terms=rules.genes_from_peaks.output
+         peak_terms=rules.genes_from_peaks.output,
+         peak_regions=rules.make_random_peaks.output
     output:
           "{project}/prioritised_terms_{bootstrap_rounds}.txt"
     threads: 1
@@ -93,4 +94,4 @@ rule go_network_analysis:
          "environment.yml"
     shell:
          #         'python3 go_network_analysis.py -vv "{input.go_tree}" "{input.peak_terms}" | dot -Tsvg > "{output}"'
-         'python3 go_network_analysis.py -vv "{input.go_tree}" "{input.peak_terms}" > "{output}"'
+         'python3 go_network_analysis.py -vv "{input.go_tree}" "{input.peak_terms}" "{input.peak_regions}" > "{output}"'

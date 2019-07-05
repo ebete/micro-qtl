@@ -11,7 +11,9 @@ import logging
 import lzma
 import pickle
 import sys
+from math import log2
 
+from get_go_in_region import get_peaks
 from go_helpers import *
 
 __description__ = "TBA."
@@ -60,7 +62,7 @@ def single_network_analysis(go_tree, global_term_occurrence, found_go_terms):
         scores = {term: occurrence}
         propagate_scores(go_tree, term, scores, occurrence)
         # if "GO:0008150" not in scores:
-            # remove non-BP terms
+        # remove non-BP terms
         # continue
         for lineage_term, propagated_score in scores.items():
             network_impact[lineage_term] = network_impact.get(lineage_term, 0) \
@@ -104,7 +106,7 @@ def make_dot_graph(go_tree, term_impact_scores, graph_name="G"):
 
     for v1, v2 in flattend_tree:
         scaled_inf_gain = (go_tree[v1].information_content - go_tree[v2].information_content - min_gain) / (
-                    max_gain - min_gain)
+                max_gain - min_gain)
         print(
             f'"{v1}" -> "{v2}" '
             f'[color = "0.800 1.000 {max(0.1, scaled_inf_gain):.3f}"];'
@@ -125,7 +127,7 @@ def traverse_tree(go_tree, tuple_list, current_node):
 
 
 def show_top(go_tree, term_impact_scores, relative_occurrence, n=10):
-    print("go_term", "go_name", "included_in_peaks", "global_fraction_in_peaks", sep="\t")
+    # print("go_term", "go_name", "background_density_factor", "global_fraction_in_peaks", sep="\t")
     for k, v in sorted(term_impact_scores.items(), key=lambda x: (x[1], relative_occurrence[x[0]], x[0]), reverse=True)[
                 :n]:
         print(k, go_tree[k].go_name, f"{v:.3f}", f"{relative_occurrence[k]:.3f}", sep="\t")
@@ -138,6 +140,8 @@ def parse_arguments():
                                                                 "create_go_tree.py")
     parser.add_argument("terms_file", metavar="TERMS", help="CSV file containing GI and GO terms of the LOD "
                                                             "peaks and genome")
+    parser.add_argument("peaks_file", metavar="PEAKS", help="CSV file containing the positions of the LOD peaks of "
+                                                            "the QTL")
     # Optional arguments
     # Standard arguments
     parser.add_argument("-v", "--verbose", help="Increase verbosity level", action="count")
@@ -169,27 +173,39 @@ if __name__ == "__main__":
 
     exitcode = 0
     try:
+        lod_peaks = {x[0]: x[1:] for x in get_peaks(args.peaks_file)}
+
         go_tree = import_go_tree(args.go_tree_file)
         all_terms = read_terms(args.terms_file)
 
         genome_go_terms = get_go_terms(all_terms["all"])
 
+        genome_nt_length = 800e6
         global_occurrence = get_value_frequency(genome_go_terms)
-        # global_lineage_occurrence = go_lineage_frequencies(go_tree, genome_go_terms)
+        global_density = {k: v / genome_nt_length for k, v in global_occurrence.items()}
+        global_lineage_occurrence = go_lineage_frequencies(go_tree, genome_go_terms)
+        global_lineage_density = {k: v / genome_nt_length for k, v in global_lineage_occurrence.items()}
 
         lod_occurrence = dict()
         term_occurrence = dict()
+        peak_term_density = dict()
+        peak_term_lineage_density = dict()
         relative_occurrence = dict()
         for lod, gi_to_go in all_terms.items():
             if lod == "all":
                 continue
+
+            peak_width = lod_peaks[lod][2] - lod_peaks[lod][1]
+
             ancestors = set()
             terms_in_region = [x for x in get_go_terms(gi_to_go) if x in go_tree]
             for term in terms_in_region:
                 get_all_ancestors(go_tree, term, ancestors)
                 relative_occurrence[term] = relative_occurrence.get(term, 0) + 1 / global_occurrence[term]
-            for term in set(terms_in_region):
-                term_occurrence[term] = term_occurrence.get(term, 0) + 1 / (len(all_terms) - 1)
+                peak_term_density[term] = peak_term_density.get(term, 0.) + 1 / peak_width
+            for ancestor, count in go_lineage_frequencies(go_tree, terms_in_region).items():
+                peak_term_lineage_density[ancestor] = peak_term_lineage_density.get(ancestor, 0.) + count / peak_width
+                term_occurrence[ancestor] = term_occurrence.get(ancestor, 0) + 1 / (len(all_terms) - 1)
             lod_occurrence[lod] = ancestors
 
             # term_impact = single_network_analysis(go_tree, global_lineage_occurrence, get_go_terms(gi_to_go))
@@ -197,7 +213,10 @@ if __name__ == "__main__":
             #     continue
             #
             # make_dot_graph(go_tree, term_impact, lod)
-        show_top(go_tree, term_occurrence, relative_occurrence, n=10)
+        dense_peak_terms = {k: log2(v / global_density[k]) for k, v in peak_term_density.items()}
+        dense_peak_lineage_terms = {k: log2(v / global_lineage_density[k]) for k, v in
+                                    peak_term_lineage_density.items()}
+        show_top(go_tree, term_occurrence, dense_peak_lineage_terms, n=10)
         # make_dot_graph(go_tree, term_occurrence)
     # except Exception as ex:
     #     exitcode = 1
