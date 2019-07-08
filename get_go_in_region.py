@@ -45,10 +45,9 @@ def get_geneid2go(idmapping_file):
         return pickle.load(f)
 
 
-def extract_genes_from_regions(gff_file, chr_id, region_start, region_end):
-    logging.info("Extracting genes in %s:%s-%s from %s ...", chr_id, region_start, region_end, gff_file)
-    matching_records = list()
-
+def load_gff_genes(gff_file):
+    logging.info("Parsing genes from %s ...", gff_file)
+    gene_records = dict()
     with gzip.open(gff_file, "rt") as gff:
         for line in gff:
             if not line:
@@ -56,32 +55,44 @@ def extract_genes_from_regions(gff_file, chr_id, region_start, region_end):
             if line[0] == "#":
                 continue
             line = line.strip().split("\t")
-            record = dict(
-                chr=line[0],
-                start=int(line[3]),
-                end=int(line[4]),
-                type=line[2],
-                annotation=line[-1]
-            )
+            record = {
+                "chr": line[0],
+                "start": int(line[3]),
+                "end": int(line[4]),
+                "type": line[2],
+                "annotation": line[-1]
+            }
 
             if record["type"] != "gene":
                 # skip all non-genes
                 continue
-            if chr_id is not None and record["chr"] != chr_id:
-                # filtering based on chromosome
-                continue
-            if region_start is not None and record["start"] < region_start:
-                # filtering based on region start
-                continue
-            if region_end is not None and record["end"] > region_end:
-                # filtering based on region end
-                continue
 
             record["annotation"] = {k: v for k, v in (x.split("=") for x in record["annotation"].split(";"))}
             record["xref"] = {k: v for k, v in (x.split(":") for x in record["annotation"]["Dbxref"].split(","))}
+            gene_id = record["xref"].get("GeneID")
+            if gene_id is not None:
+                gene_records[gene_id] = record
 
-            matching_records.append(record)
-    return set(x["xref"].get("GeneID") for x in matching_records)
+    return gene_records
+
+
+def extract_genes_from_regions(gff_records, chr_id, region_start, region_end):
+    logging.info("Extracting genes in %s:%s-%s ...", chr_id, region_start, region_end)
+
+    matching_records = set()
+    for gene_id, record in gff_records.items():
+        if chr_id is not None and record["chr"] != chr_id:
+            # filtering based on chromosome
+            continue
+        if region_start is not None and record["start"] < region_start:
+            # filtering based on region start
+            continue
+        if region_end is not None and record["end"] > region_end:
+            # filtering based on region end
+            continue
+        matching_records.add(gene_id)
+
+    return matching_records
 
 
 def get_go_terms(gene_ids, lookup_table):
@@ -132,11 +143,13 @@ if __name__ == "__main__":
 
     exitcode = 0
     try:
-        print("lod", "gi", "go", sep="\t")
         lookup_table = get_geneid2go(args.mapping_file)
+        gff_genes = load_gff_genes(args.gff_file)
+
+        print("lod", "gi", "go", sep="\t")
         peaks = get_peaks(args.peaks_file) + [("all", None, None, None)]
         for lod, chromosome, start, end in peaks:
-            genes_in_region = extract_genes_from_regions(args.gff_file, chromosome, start, end)
+            genes_in_region = extract_genes_from_regions(gff_genes, chromosome, start, end)
             gi_to_go = get_go_terms(genes_in_region, lookup_table)
             for gi, go in gi_to_go.items():
                 print(lod, gi, "; ".join(go), sep="\t")
