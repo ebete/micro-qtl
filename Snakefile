@@ -18,7 +18,7 @@ localrules: all
 
 # project constants
 PROJECT = config["project"]
-BOOTSTRAPS = list(range(50))
+BOOTSTRAPS = list(range(100))
 
 # output files
 OUTFILES = list()
@@ -41,8 +41,7 @@ rule make_id_map:
           from_id=config["id-convert"]["from"],
           to_id="go"
     shell:
-         'python3 make_uniprot_idmapping_db.py -vv --from "{params.from_id}" --to "{params.to_id}" "{params.map_file}" '
-    '"{output}"'
+         'python3 make_uniprot_idmapping_db.py -vv --from "{params.from_id}" --to "{params.to_id}" "{params.map_file}" "{output}"'
 
 rule make_random_peaks:
     output:
@@ -52,9 +51,10 @@ rule make_random_peaks:
          "environment.yml"
     params:
           gen_file=config["static-files"]["genfile"],
-          peaks=3
+          peaks=3,
+          width_cm=10.0
     shell:
-         'python3 read_genfile.py "{params.gen_file}" "{params.peaks}" > "{output}"'
+         'python3 read_genfile.py -i "{params.peaks}", -w "{params.width_cm}" "{params.gen_file}" > "{output}"'
 
 rule genes_from_peaks:
     input:

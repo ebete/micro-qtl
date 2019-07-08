@@ -2,6 +2,14 @@
 
 import sys
 import random
+import logging
+import argparse
+
+__description__ = "TBA."
+__epilog__ = """
+TBA.
+"""
+__version__ = "2019.7.0"
 
 chrmap = {
     "1": "NC_015438.1",
@@ -63,14 +71,50 @@ def get_random_interval(chrom, snps, cm, rils, interval_cm):
     return rand_snp, rand_snp + offset
 
 
+def parse_arguments():
+    parser = argparse.ArgumentParser(description=__description__, epilog=__epilog__)
+    # Required arguments
+    parser.add_argument("marker_file", metavar="GENFILE", help="File containing the genetic marker map")
+    # Optional arguments
+    parser.add_argument("-i", "--iterations", metavar="N", dest="iterations", help="Number of peaks to generate",
+                        type=int, default=1)
+    parser.add_argument("-w", "--peak-width", metavar="CM", dest="peak_width", help="Minimum width of the peaks in cM",
+                        type=float, default=10.0)
+    # Standard arguments
+    parser.add_argument("-v", "--verbose", help="Increase verbosity level", action="count")
+    parser.add_argument("-q", "--silent", help="Suppresses output messages, overriding the --verbose argument",
+                        action="store_true")
+    parser.add_argument("-l", "--log", help="Set the logging output location",
+                        type=argparse.FileType('w'), default=sys.stderr)
+    parser.add_argument("-V", "--version", action="version", version=__version__)
+    return parser.parse_args()
+
+
+def set_logging(args):
+    log_level = logging.WARNING
+    if args.silent:
+        log_level = logging.ERROR
+    elif not args.verbose:
+        pass
+    elif args.verbose >= 2:
+        log_level = logging.DEBUG
+    elif args.verbose == 1:
+        log_level = logging.INFO
+    logging.basicConfig(format="[%(asctime)s] %(message)s", level=log_level, stream=args.log)
+    logging.debug("Setting verbosity level to %s" % logging.getLevelName(log_level))
+
+
 if __name__ == "__main__":
-    chrom, snps, cm, rils = read_gen(sys.argv[1])
+    args = parse_arguments()
+    set_logging(args)
+
+    chrom, snps, cm, rils = read_gen(args.marker_file)
 
     print("lod_id", "chr", "start", "end", sep="\t")
     prev_snps = list()
     i = 1
-    while i < int(sys.argv[2]) + 1:
-        snp1, snp2 = get_random_interval(chrom, snps, cm, rils, 10.0)
+    while i <= args.iterations:
+        snp1, snp2 = get_random_interval(chrom, snps, cm, rils, args.peak_width)
         overlap = False
         for s1, s2 in prev_snps:
             if s1 < snp1 < s2 or s1 < snp2 < s2:
