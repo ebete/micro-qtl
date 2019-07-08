@@ -18,7 +18,7 @@ localrules: all
 
 # project constants
 PROJECT = config["project"]
-BOOTSTRAPS = list(range(100))
+BOOTSTRAPS = list(range(500))
 
 # output files
 OUTFILES = list()
@@ -54,7 +54,7 @@ rule make_random_peaks:
           peaks=3,
           width_cm=10.0
     shell:
-         'python3 read_genfile.py -i "{params.peaks}", -w "{params.width_cm}" "{params.gen_file}" > "{output}"'
+         'python3 read_genfile.py -i "{params.peaks}" -w "{params.width_cm}" "{params.gen_file}" > "{output}"'
 
 rule genes_from_peaks:
     input:
