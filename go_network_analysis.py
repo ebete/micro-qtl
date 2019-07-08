@@ -33,14 +33,24 @@ def run_analysis(args):
     genome_go_terms = dict()
     peak_go_terms = list()
     terms_in_peak = dict()
+    term_found_in_peaks = dict()
+    term_lineage_found_in_peaks = dict()
     total_peak_nt_length = 0
     for lod, gi_to_go in all_terms.items():
         if lod == "all":  # terms of the entire genome
-            genome_go_terms = get_go_terms(gi_to_go)
+            genome_go_terms = [x for x in get_go_terms(gi_to_go) if x in go_tree]
             continue
 
-        terms_in_peak[lod] = get_go_terms(gi_to_go)
-        peak_go_terms += get_go_terms(gi_to_go)
+        terms_in_peak[lod] = [x for x in get_go_terms(gi_to_go) if x in go_tree]
+        peak_go_terms += terms_in_peak[lod]
+
+        all_ancestors = set()
+        for term in set(terms_in_peak[lod]):
+            term_found_in_peaks[term] = term_found_in_peaks.get(term, 0) + 1
+            get_all_ancestors(go_tree, term, all_ancestors)
+        for ancestor in all_ancestors:
+            term_lineage_found_in_peaks[ancestor] = term_lineage_found_in_peaks.get(ancestor, 0) + 1
+
         total_peak_nt_length += lod_peaks[lod][2] - lod_peaks[lod][1]
 
     # calculate background term rates
@@ -59,10 +69,19 @@ def run_analysis(args):
     lfd_density = {k: log2(v / global_density[k]) for k, v in local_density.items()}
     lfd_lineage_density = {k: log2(v / global_lineage_density[k]) for k, v in local_lineage_density.items()}
 
-    # show_top(go_tree, lfd_density, n=10, descending=False)
-    show_top(go_tree, lfd_lineage_density, n=10, descending=True)
+    # remove terms that are found in less than x% of the peaks
+    min_term_peak_discovery = 0.6
+    for term in set(lfd_lineage_density.keys()):
+        if term_lineage_found_in_peaks[term] / len(terms_in_peak) < min_term_peak_discovery:
+            del lfd_lineage_density[term]
+    for term in set(lfd_density.keys()):
+        if term_found_in_peaks[term] / len(terms_in_peak) < min_term_peak_discovery:
+            del lfd_density[term]
 
-    pass
+    # show_top(go_tree, lfd_density)
+    show_top(go_tree, lfd_lineage_density, descending=False)
+
+    # make_dot_graph(go_tree, lfd_density)
 
 
 def read_terms(csv_file):
@@ -195,9 +214,11 @@ def show_top(go_tree, term_scores, n=None, descending=True):
     :type descending: bool
     :param descending: Print the GO term scores in descending order.
     """
-    print("go_term", "go_name", "scores", sep="\t")
-    for k, v in sorted(term_scores.items(), key=lambda x: (x[1], x[0]), reverse=descending)[:n]:
-        print(k, go_tree[k].go_name, f"{v:.3f}", sep="\t")
+    print("go_term   ", f"{'go_name':<50s}", "scores", "ic", sep="\t")
+    # sort order: term_score DESC, term_ic DESC, term_id DESC
+    for k, v in sorted(term_scores.items(), key=lambda x: (x[1], go_tree[x[0]].information_content, x[0]),
+                       reverse=descending)[:n]:
+        print(k, f"{go_tree[k].go_name:<50s}", f"{v:.3f}", f"{go_tree[k].information_content:.3f}", sep="\t")
 
 
 def parse_arguments():
