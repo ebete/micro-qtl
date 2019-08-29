@@ -265,3 +265,5 @@ tags
 *.txt
 *.xlsx
 *.bed
+.snakemake/
+micro_qtl*/
