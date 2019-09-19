@@ -9,5 +9,5 @@ before_script:
 tests:
   stage: test
   script:
-    - pylint --output-format=text *.py
+    - pylint --output-format=text *.py || exit 0
 #    - for f in *.py; do echo "${f}"; python3 "${f}" --version; done
