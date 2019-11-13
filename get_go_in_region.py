@@ -19,6 +19,21 @@ TBA.
 """
 __version__ = "2019.6.0"
 
+chrmap = {
+    "1": "NC_015438.1",
+    "2": "NC_015439.1",
+    "3": "NC_015440.1",
+    "4": "NC_015441.1",
+    "5": "NC_015442.1",
+    "6": "NC_015443.1",
+    "7": "NC_015444.1",
+    "8": "NC_015445.1",
+    "9": "NC_015446.1",
+    "10": "NC_015447.1",
+    "11": "NC_015448.1",
+    "12": "NC_015449.1"
+}
+
 
 def get_peaks(peaks_file):
     """
@@ -146,13 +161,16 @@ if __name__ == "__main__":
         lookup_table = get_geneid2go(args.mapping_file)
         gff_genes = load_gff_genes(args.gff_file)
 
-        print("lod", "gi", "go", sep="\t")
-        peaks = get_peaks(args.peaks_file) + [("all", None, None, None)]
+        print("lod", "peak_id", "gi", "go", sep="\t")
+        peaks = get_peaks(args.peaks_file) #+ [("all", None, None, None)]
+        peak_count = 1
         for lod, chromosome, start, end in peaks:
+            chromosome = chrmap.get(chromosome, chromosome)
             genes_in_region = extract_genes_from_regions(gff_genes, chromosome, start, end)
             gi_to_go = get_go_terms(genes_in_region, lookup_table)
             for gi, go in gi_to_go.items():
-                print(lod, gi, "; ".join(go), sep="\t")
+                print(lod, peak_count, gi, "; ".join(go), sep="\t")
+            peak_count += 1
     # except Exception as ex:
     #     exitcode = 1
     #     logging.error(ex)

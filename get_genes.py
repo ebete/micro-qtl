@@ -12,17 +12,18 @@ import lzma
 import pickle
 import sys
 import argparse
+from pathlib import Path
 
 __description__ = "TBA."
 __epilog__ = """
 TBA.
 """
-__version__ = "2019.6.0"
+__version__ = "2019.9.23"
 
 
 def get_lod_regions(peaks_file):
     regions = list()
-    with open(peaks_file, "r", newline="") as csv_file:
+    with open(peaks_file.expanduser().resolve(), "r", newline="") as csv_file:
         handle = csv.reader(csv_file, delimiter='\t')
         next(handle)
         for record in handle:
@@ -32,7 +33,7 @@ def get_lod_regions(peaks_file):
 
 def refseq2chr(mapping_file):
     mapping = dict()
-    with open(mapping_file, "r", newline="") as csv_file:
+    with open(mapping_file.expanduser().resolve(), "r", newline="") as csv_file:
         handle = csv.reader(csv_file, delimiter='\t')
         next(handle)
         for record in handle:
@@ -43,7 +44,7 @@ def refseq2chr(mapping_file):
 def get_genes_from_gff(gff_file, refseq2chr_file, region):
     mapping = refseq2chr(refseq2chr_file)
     matching_records = list()
-    with gzip.open(gff_file, "rt") as gff:
+    with gzip.open(gff_file.expanduser().resolve(), "rt") as gff:
         for line in gff:
             if not line:
                 continue
@@ -61,7 +62,7 @@ def get_genes_from_gff(gff_file, refseq2chr_file, region):
             if record["type"] != "gene":
                 continue
 
-            find_chr = mapping.get(region[1], "-")
+            find_chr = mapping.get(region[1], region[1])
             if record["chr"] != find_chr or record["start"] < int(region[2]) or record["end"] > int(region[3]):
                 continue
 
@@ -71,7 +72,7 @@ def get_genes_from_gff(gff_file, refseq2chr_file, region):
 
 def get_geneid2go(idmapping_file):
     logging.info("Decompressing and loading ID mapping database from %s ...", idmapping_file)
-    with lzma.open(idmapping_file, "rb") as f:
+    with lzma.open(idmapping_file.expanduser().resolve(), "rb") as f:
         return pickle.load(f)
 
 
@@ -111,8 +112,8 @@ if __name__ == "__main__":
     args = parse_arguments()
     set_logging(args)
 
-    regions = get_lod_regions(args.peaks_file)
-    geneid2go = get_geneid2go(args.idmap_file)
+    regions = get_lod_regions(Path(args.peaks_file))
+    geneid2go = get_geneid2go(Path(args.idmap_file))
     logging.debug("\t".join([
         "lod_index",
         "gene_index",
@@ -122,9 +123,11 @@ if __name__ == "__main__":
         "go_terms"
     ]))
 
+    print("lod", "geneid", "length", "go_terms", sep="\t")
     go_in_peak = dict()
     for region in regions:
-        records = get_genes_from_gff(args.gff_file, "refseq2chr.csv", region)
+        logging.debug("region: " + "\t".join([str(x) for x in region]))
+        records = get_genes_from_gff(Path(args.gff_file), Path("~/micro_qtl/data/chr2refseq_SL2.40.csv"), region)
         go_per_gene = dict()
         idx = 0
         for record in records:
@@ -151,7 +154,7 @@ if __name__ == "__main__":
 
             idx += 1
         for gene_id, go_terms in go_per_gene.items():
-            print("{}\t{}".format(gene_id, "; ".join(set(go_terms))))
+            print(region[0], gene_id, record["end"]-record["start"], "; ".join(set(go_terms)), sep="\t")
 
-    for lod_peak, go_terms in go_in_peak.items():
-        print("Peak {}\t{}".format(lod_peak, "; ".join(set(go_terms))))
+    # for lod_peak, go_terms in go_in_peak.items():
+    #     print(lod_peak, "; ".join(set(go_terms)), sep="\t")
