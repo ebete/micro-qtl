@@ -17,8 +17,11 @@ import time
 __description__ = "Create a dictionary object for converting between database IDs."
 __epilog__ = """
 Create a dictionary object for converting between database IDs.
+The data file can be downloaded at:
 
-ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/idmapping_selected.tab.gz
+ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/idmapping_selected.tab.gz .
+
+Column names:
 """
 __version__ = "2019.6.0"
 
@@ -70,6 +73,9 @@ _pretty_columns = [
     "Ensembl_PRO",
     "Additional PubMed"
 ]
+
+for i in range(len(_columns)):
+    __epilog__ += f"{_columns[i]} ({_pretty_columns[i]})\n\n"
 
 
 def parse_tabfile(uprot_tabfile, from_id, to_id):
